@@ -56,8 +56,13 @@ def get_output_filename(pdf_path: str) -> str:
     return f"{pdf_name}.md"
 
 
-def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, base_url: str = None) -> str:
+def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, base_url: str = None, model_name: str = None) -> str:
     """Convert PDF to Markdown using Gemini API"""
+    from google.genai import types
+    
+    # Default model
+    if model_name is None:
+        model_name = 'gemini-3-flash-preview'
     
     # Load prompt if not provided
     if prompt is None:
@@ -66,26 +71,43 @@ def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, bas
     # Encode PDF
     pdf_data = encode_pdf_to_base64(pdf_path)
     
-    # Configure Gemini API with custom client if base_url is provided
-    if base_url:
-        # Use custom base URL (e.g., for proxy or alternative endpoints)
-        client = genai.Client(api_key=api_key, base_url=base_url)
-        model = client.models.GenerativeModel('gemini-1.5-pro')
-    else:
-        # Use default Gemini API
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-pro')
-    
     # Create the prompt with PDF
     full_prompt = f"{prompt}\n\nPlease convert the following PDF to Markdown:"
     
-    # Generate content
-    response = model.generate_content(
-        [
-            {'mime_type': 'application/pdf', 'data': pdf_data},
-            full_prompt
-        ]
+    # Configure client
+    if base_url:
+        http_options = types.HttpOptions(baseUrl=base_url)
+        client = genai.Client(api_key=api_key, http_options=http_options)
+    else:
+        genai.configure(api_key=api_key)
+        client = genai.Client(api_key=api_key)
+    
+    # Use types.Part to wrap the PDF content
+    pdf_part = types.Part.from_bytes(
+        data=base64.b64decode(pdf_data) if pdf_data else b'',
+        mime_type='application/pdf'
     )
+    text_part = types.Part.from_text(text=full_prompt)
+    
+    # Check if model is gemini-3 series (uses thinking_level instead of thinking_budget)
+    if model_name.startswith('gemini-3'):
+        # Gemini 3 series uses thinking_level with enum
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[pdf_part, text_part],
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
+            )
+        )
+    else:
+        # Other models use thinking_config
+        response = client.models.generate_content(
+            model=model_name,
+            contents=[pdf_part, text_part],
+            config=types.GenerateContentConfig(
+                thinking_config=types.ThinkingConfig(thinking_budget=1024)
+            )
+        )
     
     return response.text
 
@@ -104,6 +126,7 @@ def main():
     parser.add_argument('-k', '--api-key', help='Gemini API key (optional, will use GEMINI_API_KEY env var if not provided)')
     parser.add_argument('-p', '--prompt', help='Custom prompt file (default: prompt.md)')
     parser.add_argument('-u', '--base-url', help='Custom base URL for Gemini API (optional, will use BASE_URL env var if not provided)')
+    parser.add_argument('-m', '--model', help='Gemini model to use (default: gemini-3-flash-preview)', default='gemini-3-flash-preview')
     
     args = parser.parse_args()
     
@@ -121,6 +144,9 @@ def main():
     # Get base URL
     base_url = args.base_url or os.environ.get('BASE_URL')
     
+    # Get model name
+    model_name = args.model
+    
     # Load prompt
     prompt_file = args.prompt if args.prompt else "prompt.md"
     prompt = load_prompt(prompt_file)
@@ -130,12 +156,13 @@ def main():
     
     try:
         print(f"Processing: {args.pdf_file}")
+        print(f"Using model: {model_name}")
         print(f"Using prompt: {prompt_file}")
         if base_url:
             print(f"Using custom base URL: {base_url}")
         
         # Convert PDF to Markdown
-        markdown_content = convert_pdf_to_markdown(args.pdf_file, api_key, prompt, base_url)
+        markdown_content = convert_pdf_to_markdown(args.pdf_file, api_key, prompt, base_url, model_name)
         
         # Save to file
         save_markdown(markdown_content, output_file)
