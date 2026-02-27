@@ -158,13 +158,20 @@ def stitch_markdown_chunks(chunks: list) -> str:
     return result
 
 
+def is_retryable_error(exception):
+    """Check if the error is retryable (503, 429, etc.)"""
+    error_str = str(exception).lower()
+    retryable_codes = ['503', '429', 'rate limit', 'service unavailable', 'timeout', 'time out']
+    return any(code in error_str for code in retryable_codes)
+
+
 @retry(
     stop=stop_after_attempt(3),
     wait=wait_exponential(multiplier=2, min=2, max=60),
     retry=retry_if_exception_type(Exception),
     reraise=True
 )
-def convert_chunk_with_retry(client, model_name: str, pdf_path: str, page_start: int, page_end: int, 
+def convert_chunk_with_retry(client, model_name: str, pdf_path: str, page_start: int, page_end: int,
                               prev_context: str, prompt_template: str, config) -> str:
     """Convert a single chunk of PDF pages with retry logic
     
@@ -305,12 +312,38 @@ def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, bas
         print(f"Using chunking mode with {chunk_size} page(s) per chunk...")
         return _convert_pdf_with_chunking(pdf_path, client, model_name, prompt, config, chunk_size)
     
-    # Original single-shot conversion
+    # Non-chunking conversion with retry
+    return _convert_pdf_no_chunking_with_retry(pdf_path, client, model_name, prompt, config, stream)
+
+
+def _convert_pdf_no_chunking(pdf_path: str, client, model_name: str, prompt: str, config, stream: bool = True) -> str:
+    """Convert PDF without chunking, with retry support for 503/429 errors
+    
+    Args:
+        pdf_path: Path to PDF file
+        client: Gemini client
+        model_name: Model name
+        prompt: Prompt template
+        config: Generation config
+        stream: Use streaming mode
+        
+    Returns:
+        Markdown string
+    """
+    from google.genai import types
+    
     # Encode PDF
     pdf_data = encode_pdf_to_base64(pdf_path)
     
+    # Process prompt to handle placeholders for non-chunking mode
+    # Replace placeholders with appropriate values
+    processed_prompt = prompt.replace('{PREV_CONTEXT}', '(No previous context - single file mode)')
+    processed_prompt = processed_prompt.replace('{PREVIOUS_CONTEXT}', '(No previous context - single file mode)')
+    processed_prompt = processed_prompt.replace('{PDF_CONTENT}', '[PDF content attached]')
+    processed_prompt = processed_prompt.replace('{CURRENT_PDF_CONTENT}', '[PDF content attached]')
+    
     # Create the prompt with PDF
-    full_prompt = f"{prompt}\n\nPlease convert the following PDF to Markdown:"
+    full_prompt = f"{processed_prompt}\n\nPlease convert the following PDF to Markdown:"
     
     # Use types.Part to wrap the PDF content
     pdf_part = types.Part.from_bytes(
@@ -323,35 +356,60 @@ def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, bas
     if stream:
         print("Using streaming mode...")
         full_text = ""
-        for chunk in client.models.generate_content_stream(
-            model=model_name,
-            contents=[pdf_part, text_part],
-            config=config
-        ):
-            if chunk.text:
-                full_text += chunk.text
-                print(".", end="", flush=True)
-        print(" done!")
-        return full_text
+        try:
+            for chunk in client.models.generate_content_stream(
+                model=model_name,
+                contents=[pdf_part, text_part],
+                config=config
+            ):
+                if chunk.text:
+                    full_text += chunk.text
+                    print(".", end="", flush=True)
+            print(" done!")
+            return full_text
+        except Exception as e:
+            if is_retryable_error(e):
+                print(f"\nRetryable error detected: {e}")
+                raise  # Let retry decorator handle it
+            else:
+                raise
     else:
         # Non-streaming mode
-        if model_name.startswith('gemini-3'):
-            response = client.models.generate_content(
-                model=model_name,
-                contents=[pdf_part, text_part],
-                config=types.GenerateContentConfig(
-                    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
+        try:
+            if model_name.startswith('gemini-3'):
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[pdf_part, text_part],
+                    config=types.GenerateContentConfig(
+                        thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
+                    )
                 )
-            )
-        else:
-            response = client.models.generate_content(
-                model=model_name,
-                contents=[pdf_part, text_part],
-                config=types.GenerateContentConfig(
-                    thinking_config=types.ThinkingConfig(thinking_budget=1024)
+            else:
+                response = client.models.generate_content(
+                    model=model_name,
+                    contents=[pdf_part, text_part],
+                    config=types.GenerateContentConfig(
+                        thinking_config=types.ThinkingConfig(thinking_budget=1024)
+                    )
                 )
-            )
-        return response.text
+            return response.text if response.text else ""
+        except Exception as e:
+            if is_retryable_error(e):
+                print(f"\nRetryable error detected: {e}")
+                raise
+            else:
+                raise
+
+
+@retry(
+    stop=stop_after_attempt(3),
+    wait=wait_exponential(multiplier=2, min=2, max=60),
+    retry=retry_if_exception_type(Exception),
+    reraise=True
+)
+def _convert_pdf_no_chunking_with_retry(pdf_path: str, client, model_name: str, prompt: str, config, stream: bool = True) -> str:
+    """Wrapper for non-chunking conversion with retry logic"""
+    return _convert_pdf_no_chunking(pdf_path, client, model_name, prompt, config, stream)
 
 
 def _convert_pdf_with_chunking(pdf_path: str, client, model_name: str, prompt_template: str, 
@@ -487,8 +545,8 @@ def main():
     parser.add_argument('-s', '--stream', action='store_true', default=True, help='Use streaming mode to avoid timeouts (default: enabled)')
     parser.add_argument('--no-stream', dest='stream', action='store_false', help='Disable streaming mode')
     parser.add_argument('-c', '--chunk-size', type=int, default=2, help='Number of pages per chunk for large PDFs (default: 2, use 1 for more granular processing)')
-    parser.add_argument('--no-chunking', dest='use_chunking', action='store_false', help='Disable automatic chunking for large PDFs')
-    parser.add_argument('--force-chunking', dest='use_chunking', action='store_true', help='Force chunking for all PDFs')
+    parser.add_argument('--no-chunking', dest='use_chunking', default=None, action='store_false', help='Disable automatic chunking for large PDFs')
+    parser.add_argument('--force-chunking', dest='use_chunking', default=None, action='store_true', help='Force chunking for all PDFs')
     
     args = parser.parse_args()
     
