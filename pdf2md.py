@@ -119,26 +119,51 @@ def save_markdown(content: str, output_path: str):
     print(f"Markdown saved to: {output_path}")
 
 
+def process_single_pdf(pdf_path: str, api_key: str, prompt: str, base_url: str, model_name: str, output_dir: str = None):
+    """Process a single PDF file"""
+    try:
+        print(f"\nProcessing: {pdf_path}")
+        print(f"Using model: {model_name}")
+        
+        # Determine output path
+        if output_dir:
+            pdf_name = Path(pdf_path).stem
+            output_file = os.path.join(output_dir, f"{pdf_name}.md")
+        else:
+            output_file = get_output_filename(pdf_path)
+        
+        # Convert PDF to Markdown
+        markdown_content = convert_pdf_to_markdown(pdf_path, api_key, prompt, base_url, model_name)
+        
+        # Save to file
+        save_markdown(markdown_content, output_file)
+        
+        print(f"Completed: {output_file}")
+        return True
+        
+    except Exception as e:
+        print(f"Error processing {pdf_path}: {str(e)}")
+        return False
+
+
 def main():
     parser = argparse.ArgumentParser(description='Convert PDF to Markdown using Gemini API')
-    parser.add_argument('pdf_file', help='Path to the PDF file')
-    parser.add_argument('-o', '--output', help='Output markdown file (optional, default: same name as PDF)')
+    parser.add_argument('input', help='Path to PDF file or directory containing PDF files')
+    parser.add_argument('-o', '--output', help='Output directory (for batch) or file (for single)')
     parser.add_argument('-k', '--api-key', help='Gemini API key (optional, will use GEMINI_API_KEY env var if not provided)')
     parser.add_argument('-p', '--prompt', help='Custom prompt file (default: prompt.md)')
     parser.add_argument('-u', '--base-url', help='Custom base URL for Gemini API (optional, will use BASE_URL env var if not provided)')
     parser.add_argument('-m', '--model', help='Gemini model to use (default: gemini-3-flash-preview)', default='gemini-3-flash-preview')
+    parser.add_argument('-d', '--directory', '--dir', action='store_true', help='Treat input as a directory and process all PDFs in it')
     
     args = parser.parse_args()
     
-    # Check if PDF file exists
-    if not os.path.exists(args.pdf_file):
-        print(f"Error: PDF file not found: {args.pdf_file}")
-        sys.exit(1)
+    input_path = args.input
     
     # Get API key
     api_key = args.api_key or os.environ.get('GEMINI_API_KEY')
     if not api_key:
-        print("Error: Please provide API key via -k option, GEMINI_API_KEY in .env, or BASE_URL environment variable")
+        print("Error: Please provide API key via -k option, GEMINI_API_KEY in .env, or set BASE_URL environment variable")
         sys.exit(1)
     
     # Get base URL
@@ -151,26 +176,74 @@ def main():
     prompt_file = args.prompt if args.prompt else "prompt.md"
     prompt = load_prompt(prompt_file)
     
-    # Get output filename
-    output_file = args.output if args.output else get_output_filename(args.pdf_file)
+    # Determine if input is a directory or file
+    is_directory = args.directory or (os.path.isdir(input_path) if os.path.exists(input_path) else False)
     
     try:
-        print(f"Processing: {args.pdf_file}")
-        print(f"Using model: {model_name}")
-        print(f"Using prompt: {prompt_file}")
-        if base_url:
-            print(f"Using custom base URL: {base_url}")
-        
-        # Convert PDF to Markdown
-        markdown_content = convert_pdf_to_markdown(args.pdf_file, api_key, prompt, base_url, model_name)
-        
-        # Save to file
-        save_markdown(markdown_content, output_file)
-        
-        print("Conversion completed successfully!")
+        if is_directory:
+            # Batch processing: process all PDFs in directory
+            if not os.path.isdir(input_path):
+                print(f"Error: {input_path} is not a directory")
+                sys.exit(1)
+            
+            # Get output directory
+            output_dir = args.output if args.output else input_path
+            
+            # Find all PDF files
+            pdf_files = list(Path(input_path).glob("*.pdf"))
+            
+            if not pdf_files:
+                print(f"No PDF files found in {input_path}")
+                sys.exit(1)
+            
+            print(f"Found {len(pdf_files)} PDF files to process")
+            print(f"Output directory: {output_dir}")
+            print(f"Using model: {model_name}")
+            print(f"Using prompt: {prompt_file}")
+            if base_url:
+                print(f"Using custom base URL: {base_url}")
+            
+            # Process each PDF
+            success_count = 0
+            fail_count = 0
+            
+            for pdf_file in pdf_files:
+                pdf_path = str(pdf_file)
+                if process_single_pdf(pdf_path, api_key, prompt, base_url, model_name, output_dir):
+                    success_count += 1
+                else:
+                    fail_count += 1
+            
+            print(f"\n{'='*50}")
+            print(f"Batch processing completed!")
+            print(f"Success: {success_count}, Failed: {fail_count}")
+            print(f"Output files saved to: {output_dir}")
+            
+        else:
+            # Single file processing
+            if not os.path.exists(input_path):
+                print(f"Error: PDF file not found: {input_path}")
+                sys.exit(1)
+            
+            # Get output filename
+            output_file = args.output if args.output else get_output_filename(input_path)
+            
+            print(f"Processing: {input_path}")
+            print(f"Using model: {model_name}")
+            print(f"Using prompt: {prompt_file}")
+            if base_url:
+                print(f"Using custom base URL: {base_url}")
+            
+            # Convert PDF to Markdown
+            markdown_content = convert_pdf_to_markdown(input_path, api_key, prompt, base_url, model_name)
+            
+            # Save to file
+            save_markdown(markdown_content, output_file)
+            
+            print("Conversion completed successfully!")
         
     except Exception as e:
-        print(f"Error during conversion: {str(e)}")
+        print(f"Error: {str(e)}")
         sys.exit(1)
 
 

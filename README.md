@@ -70,18 +70,26 @@ python pdf2md.py input.pdf -p my_prompt.md
 
 | 参数 | 简写 | 说明 |
 |------|------|------|
-| `pdf_file` | - | 输入的 PDF 文件路径（必需） |
-| `--output` | `-o` | 输出的 Markdown 文件路径（可选，默认与 PDF 同名） |
+| `input` | - | 输入的 PDF 文件路径或目录（必需） |
+| `--output` | `-o` | 输出目录（批量处理时）或输出文件（单文件时） |
 | `--api-key` | `-k` | Gemini API 密钥 |
 | `--prompt` | `-p` | 提示词文件路径（默认: prompt.md） |
 | `--base-url` | `-u` | 自定义 Base URL（可选，用于代理或其他 API 端点） |
+| `--model` | `-m` | 使用的模型（默认: gemini-3-flash-preview） |
+| `--directory` | `-d` | 将输入作为目录，处理目录下所有 PDF 文件 |
 
 ## 示例
 
 ```bash
-# 将 document.pdf 转换为 document.md
+# 单文件转换
 python pdf2md.py document.pdf
 
-# 带 API Key
-python pdf2md.py document.pdf -k AIzaSy...
+# 批量处理：转换目录下所有 PDF 文件
+python pdf2md.py ./pdfs
+
+# 批量处理：指定输出目录
+python pdf2md.py ./pdfs -o ./output
+
+# 批量处理：使用 -d 参数明确指定目录模式
+python pdf2md.py ./pdfs -d
 ```
