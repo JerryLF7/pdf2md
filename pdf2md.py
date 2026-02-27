@@ -33,8 +33,8 @@ except ImportError:
 load_dotenv()
 
 
-def load_prompt(prompt_file: str = "prompt.md") -> str:
-    """Load the prompt from prompt.md file"""
+def load_prompt(prompt_file: str = "prompt_v3.md") -> str:
+    """Load the prompt from prompt_v3.md file"""
     prompt_path = Path(prompt_file)
     if not prompt_path.exists():
         print(f"Warning: {prompt_file} not found, using default prompt")
@@ -56,8 +56,17 @@ def get_output_filename(pdf_path: str) -> str:
     return f"{pdf_name}.md"
 
 
-def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, base_url: str = None, model_name: str = None) -> str:
-    """Convert PDF to Markdown using Gemini API"""
+def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, base_url: str = None, model_name: str = None, stream: bool = True) -> str:
+    """Convert PDF to Markdown using Gemini API
+    
+    Args:
+        pdf_path: Path to the PDF file
+        api_key: Gemini API key
+        prompt: Custom prompt text
+        base_url: Custom base URL
+        model_name: Model to use
+        stream: Use streaming mode to avoid timeouts (default: True)
+    """
     from google.genai import types
     
     # Default model
@@ -74,12 +83,11 @@ def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, bas
     # Create the prompt with PDF
     full_prompt = f"{prompt}\n\nPlease convert the following PDF to Markdown:"
     
-    # Configure client
+    # Configure client - always use Client, never use configure()
     if base_url:
         http_options = types.HttpOptions(baseUrl=base_url)
         client = genai.Client(api_key=api_key, http_options=http_options)
     else:
-        genai.configure(api_key=api_key)
         client = genai.Client(api_key=api_key)
     
     # Use types.Part to wrap the PDF content
@@ -89,27 +97,49 @@ def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, bas
     )
     text_part = types.Part.from_text(text=full_prompt)
     
-    # Check if model is gemini-3 series (uses thinking_level instead of thinking_budget)
+    # Determine config based on model
     if model_name.startswith('gemini-3'):
-        # Gemini 3 series uses thinking_level with enum
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[pdf_part, text_part],
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
-            )
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
         )
     else:
-        # Other models use thinking_config
-        response = client.models.generate_content(
-            model=model_name,
-            contents=[pdf_part, text_part],
-            config=types.GenerateContentConfig(
-                thinking_config=types.ThinkingConfig(thinking_budget=1024)
-            )
+        config = types.GenerateContentConfig(
+            thinking_config=types.ThinkingConfig(thinking_budget=1024)
         )
     
-    return response.text
+    # Use streaming to avoid timeouts on large files
+    if stream:
+        print("Using streaming mode...")
+        full_text = ""
+        for chunk in client.models.generate_content_stream(
+            model=model_name,
+            contents=[pdf_part, text_part],
+            config=config
+        ):
+            if chunk.text:
+                full_text += chunk.text
+                print(".", end="", flush=True)
+        print(" done!")
+        return full_text
+    else:
+        # Non-streaming mode
+        if model_name.startswith('gemini-3'):
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[pdf_part, text_part],
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_level=types.ThinkingLevel.HIGH)
+                )
+            )
+        else:
+            response = client.models.generate_content(
+                model=model_name,
+                contents=[pdf_part, text_part],
+                config=types.GenerateContentConfig(
+                    thinking_config=types.ThinkingConfig(thinking_budget=1024)
+                )
+            )
+        return response.text
 
 
 def save_markdown(content: str, output_path: str):
@@ -119,7 +149,7 @@ def save_markdown(content: str, output_path: str):
     print(f"Markdown saved to: {output_path}")
 
 
-def process_single_pdf(pdf_path: str, api_key: str, prompt: str, base_url: str, model_name: str, output_dir: str = None):
+def process_single_pdf(pdf_path: str, api_key: str, prompt: str, base_url: str, model_name: str, output_dir: str = None, stream: bool = True):
     """Process a single PDF file"""
     try:
         print(f"\nProcessing: {pdf_path}")
@@ -133,7 +163,7 @@ def process_single_pdf(pdf_path: str, api_key: str, prompt: str, base_url: str, 
             output_file = get_output_filename(pdf_path)
         
         # Convert PDF to Markdown
-        markdown_content = convert_pdf_to_markdown(pdf_path, api_key, prompt, base_url, model_name)
+        markdown_content = convert_pdf_to_markdown(pdf_path, api_key, prompt, base_url, model_name, stream=stream)
         
         # Save to file
         save_markdown(markdown_content, output_file)
@@ -151,10 +181,12 @@ def main():
     parser.add_argument('input', help='Path to PDF file or directory containing PDF files')
     parser.add_argument('-o', '--output', help='Output directory (for batch) or file (for single)')
     parser.add_argument('-k', '--api-key', help='Gemini API key (optional, will use GEMINI_API_KEY env var if not provided)')
-    parser.add_argument('-p', '--prompt', help='Custom prompt file (default: prompt.md)')
+    parser.add_argument('-p', '--prompt', help='Custom prompt file (default: prompt_v3.md)')
     parser.add_argument('-u', '--base-url', help='Custom base URL for Gemini API (optional, will use BASE_URL env var if not provided)')
     parser.add_argument('-m', '--model', help='Gemini model to use (default: gemini-3-flash-preview)', default='gemini-3-flash-preview')
     parser.add_argument('-d', '--directory', '--dir', action='store_true', help='Treat input as a directory and process all PDFs in it')
+    parser.add_argument('-s', '--stream', action='store_true', default=True, help='Use streaming mode to avoid timeouts (default: enabled)')
+    parser.add_argument('--no-stream', dest='stream', action='store_false', help='Disable streaming mode')
     
     args = parser.parse_args()
     
@@ -173,8 +205,11 @@ def main():
     model_name = args.model
     
     # Load prompt
-    prompt_file = args.prompt if args.prompt else "prompt.md"
+    prompt_file = args.prompt if args.prompt else "prompt_v3.md"
     prompt = load_prompt(prompt_file)
+    
+    # Get stream option
+    stream_mode = args.stream
     
     # Determine if input is a directory or file
     is_directory = args.directory or (os.path.isdir(input_path) if os.path.exists(input_path) else False)
@@ -209,7 +244,7 @@ def main():
             
             for pdf_file in pdf_files:
                 pdf_path = str(pdf_file)
-                if process_single_pdf(pdf_path, api_key, prompt, base_url, model_name, output_dir):
+                if process_single_pdf(pdf_path, api_key, prompt, base_url, model_name, output_dir, stream=stream_mode):
                     success_count += 1
                 else:
                     fail_count += 1
@@ -235,7 +270,7 @@ def main():
                 print(f"Using custom base URL: {base_url}")
             
             # Convert PDF to Markdown
-            markdown_content = convert_pdf_to_markdown(input_path, api_key, prompt, base_url, model_name)
+            markdown_content = convert_pdf_to_markdown(input_path, api_key, prompt, base_url, model_name, stream=stream_mode)
             
             # Save to file
             save_markdown(markdown_content, output_file)
