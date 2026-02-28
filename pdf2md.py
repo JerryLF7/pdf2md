@@ -254,7 +254,7 @@ def get_output_filename(pdf_path: str) -> str:
 
 def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, base_url: str = None, 
                            model_name: str = None, stream: bool = True, chunk_size: int = 1,
-                           use_chunking: bool = False) -> str:
+                           use_chunking: bool = False, progress_callback: callable = None) -> str:
     """Convert PDF to Markdown using Gemini API
     
     Args:
@@ -266,6 +266,7 @@ def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, bas
         stream: Use streaming mode to avoid timeouts (default: True)
         chunk_size: Number of pages per chunk (default: 1)
         use_chunking: Enable chunking for large PDFs (default: False)
+        progress_callback: Optional callback function(current_chunk, total_chunks, page_start, page_end) for progress updates
     """
     from google.genai import types
     
@@ -310,9 +311,12 @@ def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, bas
     # Use chunking if enabled
     if use_chunking and chunk_size > 0:
         print(f"Using chunking mode with {chunk_size} page(s) per chunk...")
-        return _convert_pdf_with_chunking(pdf_path, client, model_name, prompt, config, chunk_size)
+        return _convert_pdf_with_chunking(pdf_path, client, model_name, prompt, config, chunk_size, progress_callback)
     
-    # Non-chunking conversion with retry
+    # Non-chunking conversion with retry - call progress callback at start and end
+    if progress_callback:
+        # For non-chunking, we don't have granular progress, so just mark start and complete
+        progress_callback(1, 1, 0, 0, 1)
     return _convert_pdf_no_chunking_with_retry(pdf_path, client, model_name, prompt, config, stream)
 
 
@@ -413,7 +417,7 @@ def _convert_pdf_no_chunking_with_retry(pdf_path: str, client, model_name: str, 
 
 
 def _convert_pdf_with_chunking(pdf_path: str, client, model_name: str, prompt_template: str, 
-                               config, chunk_size: int = 1) -> str:
+                               config, chunk_size: int = 1, progress_callback: callable = None) -> str:
     """Internal function to convert PDF using chunking
     
     Args:
@@ -423,6 +427,7 @@ def _convert_pdf_with_chunking(pdf_path: str, client, model_name: str, prompt_te
         prompt_template: Prompt template with placeholders
         config: Generation config
         chunk_size: Number of pages per chunk
+        progress_callback: Optional callback function(current_chunk, total_chunks, page_start, page_end) for progress updates
         
     Returns:
         Combined markdown string
@@ -438,14 +443,18 @@ def _convert_pdf_with_chunking(pdf_path: str, client, model_name: str, prompt_te
     
     chunks = []
     prev_context = ""
+    total_chunks = (total_pages + chunk_size - 1) // chunk_size
     
     # Process in chunks
     for start_page in range(0, total_pages, chunk_size):
         end_page = min(start_page + chunk_size - 1, total_pages - 1)
         chunk_num = start_page // chunk_size + 1
-        total_chunks = (total_pages + chunk_size - 1) // chunk_size
         
         print(f"Processing chunk {chunk_num}/{total_chunks} (pages {start_page + 1}-{end_page + 1})...")
+        
+        # Call progress callback if provided
+        if progress_callback:
+            progress_callback(chunk_num, total_chunks, start_page, end_page, total_pages)
         
         try:
             chunk_text = convert_chunk_with_retry(

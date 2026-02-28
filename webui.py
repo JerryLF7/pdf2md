@@ -27,7 +27,24 @@ import io
 import zipfile
 
 import streamlit as st
+import fitz
 from pdf2md import convert_pdf_to_markdown, load_prompt
+
+
+def get_pdf_page_count(pdf_file) -> int:
+    """Get page count of an uploaded PDF file"""
+    try:
+        # Save to temp and read
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp:
+            tmp.write(pdf_file.getvalue())
+            tmp_path = tmp.name
+        doc = fitz.open(tmp_path)
+        page_count = len(doc)
+        doc.close()
+        os.unlink(tmp_path)
+        return page_count
+    except Exception:
+        return 1  # Default to 1 page if can't read
 
 st.set_page_config(page_title="PDF to Markdown Converter", page_icon="📄", layout="wide")
 
@@ -85,14 +102,46 @@ with col_input:
                 else:
                     prompt = load_prompt("prompt_v4.md")
                 
+                # Pre-calculate total pages for accurate progress tracking
+                file_page_counts = []
+                total_pages = 0
+                for f in uploaded_files:
+                    page_count = get_pdf_page_count(f)
+                    file_page_counts.append(page_count)
+                    total_pages += page_count
+                
                 progress_container = st.container()
                 progress_bar = progress_container.progress(0)
                 status_text = progress_container.empty()
                 
                 for i, f in enumerate(uploaded_files):
-                    progress = (i + 1) / len(uploaded_files)
-                    progress_bar.progress(progress)
-                    status_text.text(f"Processing ({i+1}/{len(uploaded_files)}): {f.name}...")
+                    file_pages = file_page_counts[i]
+                    file_name = f.name  # Capture file name to avoid closure issues
+                    
+                    # Create progress callback for this file
+                    def make_progress_callback(file_idx, file_pages_count, current_file_name):
+                        def update_progress(chunk_num, total_chunks, page_start, page_end, file_total_pages):
+                            # Calculate base progress from previously processed files
+                            base_progress = sum(file_page_counts[:file_idx]) / total_pages
+                            
+                            if total_chunks > 1:
+                                # Chunked file: progress = base + (current_chunk_progress / total_pages)
+                                chunk_progress = chunk_num / total_chunks
+                                current_file_progress = (chunk_progress * file_pages_count) / total_pages
+                            else:
+                                # Non-chunked file: progress = base + (file_pages / total_pages)
+                                current_file_progress = file_pages_count / total_pages
+                            
+                            total_progress = min(base_progress + current_file_progress, 1.0)
+                            progress_bar.progress(total_progress)
+                            
+                            if total_chunks > 1:
+                                status_text.text(f"Processing {current_file_name}: Chunk {chunk_num}/{total_chunks} (pages {page_start+1}-{page_end+1})")
+                            else:
+                                status_text.text(f"Processing {current_file_name} ({file_pages_count} pages)")
+                        return update_progress
+                    
+                    progress_callback = make_progress_callback(i, file_pages, file_name)
                     
                     # Save uploaded file to temp
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_input:
@@ -108,8 +157,10 @@ with col_input:
                             model_name=model,
                             chunk_size=chunk_size,
                             stream=use_stream,
-                            use_chunking=force_chunking
+                            use_chunking=force_chunking,
+                            progress_callback=progress_callback
                         )
+                        
                         # Store in session state
                         st.session_state.converted_results.append({
                             "name": f.name,
@@ -122,7 +173,8 @@ with col_input:
                         if os.path.exists(tmp_input_path):
                             os.unlink(tmp_input_path)
                 
-                status_text.success(f"✅ Successfully converted {len(uploaded_files)} file(s)!")
+                progress_bar.progress(1.0)
+                status_text.success(f"✅ Successfully converted {len(uploaded_files)} file(s) ({total_pages} pages)!")
                 st.balloons()
 
 with col_output:
