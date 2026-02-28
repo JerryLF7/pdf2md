@@ -62,10 +62,10 @@ force_chunking = st.sidebar.toggle("Force Chunking", value=False)
 
 # Prompt file selection
 prompt_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.startswith('prompt') and f.endswith('.md')]
-prompt_option = st.sidebar.selectbox("Prompt Template", [""] + prompt_files if prompt_files else [""])
+prompt_option = st.sidebar.selectbox("Prompt Template", prompt_files if prompt_files else ["prompt_v4.md"])
 
 # Custom prompt input
-custom_prompt = st.sidebar.text_area("Custom Prompt", height=150, placeholder="Or enter custom prompt here...")
+custom_prompt = st.sidebar.text_area("Custom Prompt (optional)", height=150, placeholder="Or enter custom prompt here...")
 
 # Main area
 st.header("Upload PDFs")
