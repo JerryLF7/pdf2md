@@ -3,10 +3,43 @@ PDF to Markdown Web UI
 Run: streamlit run webui.py
 """
 
-import streamlit as st
+# Auto-install streamlit if not available
+try:
+    import streamlit as st
+except ImportError:
+    print("Installing streamlit...")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "streamlit"])
+    import streamlit as st
+
 import os
 import sys
 import tempfile
+
+# Auto-install dependencies if not available
+try:
+    import google.genai as genai
+except ImportError:
+    print("Installing google-genai...")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "google-genai"])
+    import google.genai as genai
+
+try:
+    from dotenv import load_dotenv
+except ImportError:
+    print("Installing python-dotenv...")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "python-dotenv"])
+    from dotenv import load_dotenv
+
+try:
+    import fitz
+except ImportError:
+    print("Installing PyMuPDF...")
+    import subprocess
+    subprocess.check_call([sys.executable, "-m", "pip", "install", "pymupdf"])
+    import fitz
 
 # Add current dir to path
 sys.path.insert(0, os.path.dirname(__file__))
