@@ -1,20 +1,19 @@
 # PDF to Markdown Converter
 
-使用 Google Gemini API 将 PDF 文件转换为 Markdown 格式。
+使用 Google Gemini API 将 PDF 文件转换为 Markdown 格式。支持命令行和 Web UI 两种使用方式。
 
 ## 功能
 
-- 读取 PDF 文件
-- 使用自定义提示词（默认: `prompt_v4.md`）
-- 调用 Gemini API 进行转换
-- 输出与输入文件同名的 `.md` 文件
-- **大文件分块处理**：自动将长 PDF（>10页）分块处理，避免 token 限制和超时
-- **流式输出**：避免大文件转换超时
-- **批量处理**：支持目录批量转换
+- 📄 PDF 转 Markdown 转换
+- 🔄 大文件分块处理（>10页自动启用）
+- 📡 流式输出，避免大文件超时
+- 📁 批量处理目录下的所有 PDF
+- 🎨 Web UI 图形界面（支持多文件拖拽、进度跟踪、批量下载）
+- ⚙️ 支持自定义提示词和模型参数
 
 ## 使用方法
 
-### 1. 安装依赖
+### 命令行方式
 
 ```bash
 pip install google-genai python-dotenv pymupdf tenacity
@@ -26,16 +25,12 @@ pip install google-genai python-dotenv pymupdf tenacity
 
 1. 复制 `.env.example` 为 `.env`:
    ```bash
-   copy .env.example .env
+   cp .env.example .env
    ```
 
-2. 编辑 `.env` 文件:
+2. 编辑 `.env` 文件，填入你的 API Key：
    ```
-   # 必需：API Key
-   GEMINI_API_KEY=你的API密钥
-   
-   # 可选：自定义 Base URL（用于代理或其他 API 端点）
-   # BASE_URL=https://api.example.com/v1
+   GEMINI_API_KEY=你的Gemini_API密钥
    ```
 
 **方式二：环境变量**
@@ -141,18 +136,21 @@ python pdf2md.py document.pdf --no-stream
 python pdf2md.py document.pdf -m gemini-2.0-flash-exp
 ```
 
-## Web UI（可选）
+## Web UI（推荐）
 
-如果喜欢图形界面，可以用 Streamlit Web UI：
+推荐使用 Web UI，界面更友好，功能更丰富：
 
 ```bash
-# 安装 streamlit
-pip install streamlit
-
-# 启动 Web UI
 streamlit run webui.py
 ```
 
 然后打开浏览器 http://localhost:8501
 
-功能与命令行一致，支持拖拽上传、参数配置、Markdown 预览和下载。
+### Web UI 功能
+
+- 🎨 拖拽上传多个 PDF 文件
+- 📊 实时进度显示（精确到页）
+- 💾 支持批量下载（ZIP 格式）
+- ⚙️ 侧边栏参数配置
+- 📝 支持自定义提示词
+- 🔄 转换结果保存在会话中
