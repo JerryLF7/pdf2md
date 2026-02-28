@@ -71,7 +71,7 @@ with st.sidebar:
         
         # Prompt file selection
         prompt_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.startswith('prompt') and f.endswith('.md')]
-        prompt_option = st.selectbox("Prompt Template", prompt_files if prompt_files else ["prompt_v4.md"])
+        prompt_option = st.selectbox("Prompt Template", prompt_files if prompt_files else ["prompt_mortgage.md"])
         
     custom_prompt = st.text_area("Custom Prompt (optional)", height=200, placeholder="Or enter custom prompt here...")
 
@@ -101,7 +101,7 @@ with col_input:
                 elif prompt_option:
                     prompt = load_prompt(prompt_option, skip_toc=not include_toc)
                 else:
-                    prompt = load_prompt("prompt_v4.md", skip_toc=not include_toc)
+                    prompt = load_prompt("prompt_mortgage.md", skip_toc=not include_toc)
                 
                 # Pre-calculate total pages for accurate progress tracking
                 file_page_counts = []

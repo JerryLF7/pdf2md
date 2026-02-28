@@ -57,11 +57,11 @@ load_dotenv()
 CONTEXT_CHAR_LIMIT = 500
 
 
-def load_prompt(prompt_file: str = "prompt_v4.md", skip_toc: bool = True) -> str:
-    """Load the prompt from prompt_v4.md file
+def load_prompt(prompt_file: str = "prompt_mortgage.md", skip_toc: bool = True) -> str:
+    """Load the prompt from prompt file
     
     Args:
-        prompt_file: Path to the prompt file
+        prompt_file: Path to the prompt file (default: prompt_mortgage.md)
         skip_toc: If True (default), keep the "Skip Table of Contents" instruction.
                   If False, remove that instruction to include TOC in output.
     """
@@ -576,7 +576,7 @@ def main():
     parser.add_argument('input', help='Path to PDF file or directory containing PDF files')
     parser.add_argument('-o', '--output', help='Output directory (for batch) or file (for single)')
     parser.add_argument('-k', '--api-key', help='Gemini API key (optional, will use GEMINI_API_KEY env var if not provided)')
-    parser.add_argument('-p', '--prompt', help='Custom prompt file (default: prompt_v4.md)')
+    parser.add_argument('-p', '--prompt', help='Custom prompt file (default: prompt_mortgage.md)')
     parser.add_argument('-u', '--base-url', help='Custom base URL for Gemini API (optional, will use BASE_URL env var if not provided)')
     parser.add_argument('-m', '--model', help='Gemini model to use (default: gemini-3-flash-preview)', default='gemini-3-flash-preview')
     parser.add_argument('-d', '--directory', '--dir', action='store_true', help='Treat input as a directory and process all PDFs in it')
@@ -604,7 +604,7 @@ def main():
     model_name = args.model
 
     # Load prompt
-    prompt_file = args.prompt if args.prompt else "prompt_v4.md"
+    prompt_file = args.prompt if args.prompt else "prompt_mortgage.md"
     skip_toc = not args.include_toc if hasattr(args, 'include_toc') else True
     prompt = load_prompt(prompt_file, skip_toc=skip_toc)
 

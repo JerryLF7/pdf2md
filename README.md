@@ -51,9 +51,14 @@ set BASE_URL=https://api.example.com/v1
 python pdf2md.py input.pdf -k 你的API密钥 -u https://api.example.com/v1
 ```
 
-### 3. 编辑提示词文件
+### 3. 选择提示词模板
 
-在 `prompt_v4.md` 文件中添加你想要使用的提示词。提示词模板支持以下占位符：
+项目内置两个提示词模板：
+
+- `prompt_mortgage.md` — 财务/贷款专用（**默认**），强调金额、百分比等数据精度
+- `prompt_general.md` — 通用模板，适用于各类文档
+
+在对应文件中编辑提示词即可。提示词模板支持以下占位符：
 
 - `{PREV_CONTEXT}` 或 `{PREVIOUS_CONTEXT}` - 上一页输出的最后 500 字符（用于上下文衔接）
 - `{PDF_CONTENT}` 或 `{CURRENT_PDF_CONTENT}` - 当前 PDF 页面内容
@@ -81,7 +86,7 @@ python pdf2md.py input.pdf -p my_prompt.md
 | `input` | - | 输入的 PDF 文件路径或目录（必需） |
 | `--output` | `-o` | 输出目录（批量处理时）或输出文件（单文件时） |
 | `--api-key` | `-k` | Gemini API 密钥 |
-| `--prompt` | `-p` | 提示词文件路径（默认: prompt_v4.md） |
+| `--prompt` | `-p` | 提示词文件路径（默认: prompt_mortgage.md） |
 | `--base-url` | `-u` | 自定义 Base URL（可选，用于代理或其他 API 端点） |
 | `--model` | `-m` | 使用的模型（默认: gemini-3-flash-preview） |
 | `--directory` | `-d` | 将输入作为目录，处理目录下所有 PDF 文件 |
