@@ -68,18 +68,23 @@ prompt_option = st.sidebar.selectbox("Prompt Template", prompt_files if prompt_f
 custom_prompt = st.sidebar.text_area("Custom Prompt (optional)", height=150, placeholder="Or enter custom prompt here...")
 
 # Main area
-st.header("Upload PDFs")
-uploaded_files = st.file_uploader("Upload PDF", type=["pdf"], accept_multiple_files=True)
+st.header("📁 Upload & Convert")
 
-if uploaded_files:
-    file_count = len(uploaded_files)
-    st.info(f"📎 {file_count} file(s) selected")
+col1, col2 = st.columns(2)
+
+with col1:
+    st.subheader("📤 Uploaded Files")
+    uploaded_files = st.file_uploader("Upload PDF", type=["pdf"], accept_multiple_files=True, label_visibility="collapsed")
     
-    # Show file list
-    for i, f in enumerate(uploaded_files):
-        st.write(f"{i+1}. {f.name}")
+    if uploaded_files:
+        st.write(f"**{len(uploaded_files)} file(s) selected:**")
+        for f in uploaded_files:
+            st.write(f"• {f.name}")
+
+with col2:
+    st.subheader("📥 Converted Results")
     
-    if st.button("🚀 Convert to Markdown"):
+    if uploaded_files and st.button("🚀 Convert to Markdown", type="primary"):
         if not api_key:
             st.error("❌ Please enter API Key")
         else:
@@ -92,8 +97,11 @@ if uploaded_files:
                 prompt = load_prompt("prompt_v4.md")
             
             results = []
+            progress_bar = st.progress(0)
             
-            for f in uploaded_files:
+            for i, f in enumerate(uploaded_files):
+                progress_bar.progress((i + 1) / len(uploaded_files))
+                
                 with st.spinner(f"Converting {f.name}..."):
                     # Save uploaded file to temp
                     with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_input:
@@ -113,20 +121,21 @@ if uploaded_files:
                         )
                         results.append((f.name, output_md))
                     except Exception as e:
-                        st.error(f"❌ Error converting {f.name}: {str(e)}")
+                        st.error(f"❌ Error: {f.name} - {str(e)}")
                     finally:
                         os.unlink(tmp_input_path)
             
+            progress_bar.empty()
+            
             if results:
-                st.success(f"✅ Done! {len(results)} file(s) converted")
+                st.success(f"✅ {len(results)} file(s) converted!")
                 
                 for filename, md_content in results:
-                    with st.expander(f"📄 {filename}"):
-                        st.text_area(filename, md_content, height=200)
-                        output_filename = filename.replace(".pdf", ".md")
-                        st.download_button(
-                            label=f"📥 Download {output_filename}",
-                            data=md_content,
-                            file_name=output_filename,
-                            mime="text/markdown"
-                        )
+                    output_filename = filename.replace(".pdf", ".md")
+                    st.download_button(
+                        label=f"📥 {output_filename}",
+                        data=md_content,
+                        file_name=output_filename,
+                        mime="text/markdown",
+                        use_container_width=True
+                    )
