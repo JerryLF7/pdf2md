@@ -23,6 +23,9 @@ install_if_missing("google-genai", "google.genai")
 install_if_missing("python-dotenv", "dotenv")
 install_if_missing("pymupdf", "fitz")
 
+import io
+import zipfile
+
 import streamlit as st
 from pdf2md import convert_pdf_to_markdown, load_prompt
 
@@ -126,29 +129,52 @@ with col_output:
     st.subheader("📥 2. Converted Results")
     
     if st.session_state.converted_results:
-        col_res1, col_res2 = st.columns([0.7, 0.3])
-        with col_res2:
+        # Top action bar
+        col_top1, col_top2, col_top3 = st.columns([1, 1, 1])
+        
+        # Create ZIP file for batch download
+        zip_buffer = io.BytesIO()
+        with zipfile.ZipFile(zip_buffer, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for result in st.session_state.converted_results:
+                output_filename = result['name'].replace(".pdf", ".md")
+                zip_file.writestr(output_filename, result['md'])
+        zip_buffer.seek(0)
+        
+        with col_top1:
+            st.download_button(
+                label="📦 Download All (ZIP)",
+                data=zip_buffer,
+                file_name="converted_files.zip",
+                mime="application/zip",
+                key="dl_all_zip",
+                type="primary",
+                use_container_width=True
+            )
+        with col_top3:
             if st.button("🗑️ Clear All", use_container_width=True):
                 st.session_state.converted_results = []
                 st.rerun()
-
-        # Display results
+        
+        st.divider()
+        
+        # Display results as cards
         for result in reversed(st.session_state.converted_results): # Show newest first
-            with st.container():
-                col1, col2 = st.columns([0.7, 0.3], vertical_alignment="center")
-                with col1:
+            output_filename = result['name'].replace(".pdf", ".md")
+            
+            # Card-style container
+            with st.container(border=True):
+                col_card1, col_card2 = st.columns([4, 1], vertical_alignment="center")
+                with col_card1:
                     st.markdown(f"**📄 {result['name']}**")
-                with col2:
-                    output_filename = result['name'].replace(".pdf", ".md")
+                    st.caption(f"→ {output_filename}")
+                with col_card2:
                     st.download_button(
-                        label="📥 Download",
+                        label="📥",
                         data=result['md'],
                         file_name=output_filename,
                         mime="text/markdown",
                         key=f"dl_{result['id']}",
                         use_container_width=True
                     )
-                
-                st.markdown("---")
     else:
         st.info("💡 Converted files will appear here.")
