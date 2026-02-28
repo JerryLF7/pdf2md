@@ -67,6 +67,7 @@ with st.sidebar:
         chunk_size = st.number_input("Chunk Size (Pages)", min_value=1, max_value=20, value=2)
         use_stream = st.toggle("Stream Output", value=True)
         force_chunking = st.toggle("Force Chunking", value=False)
+        include_toc = st.toggle("Include TOC", value=False, help="Include Table of Contents in output")
         
         # Prompt file selection
         prompt_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.startswith('prompt') and f.endswith('.md')]
@@ -98,9 +99,9 @@ with col_input:
                 if custom_prompt.strip():
                     prompt = custom_prompt
                 elif prompt_option:
-                    prompt = load_prompt(prompt_option)
+                    prompt = load_prompt(prompt_option, skip_toc=not include_toc)
                 else:
-                    prompt = load_prompt("prompt_v4.md")
+                    prompt = load_prompt("prompt_v4.md", skip_toc=not include_toc)
                 
                 # Pre-calculate total pages for accurate progress tracking
                 file_page_counts = []
