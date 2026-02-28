@@ -54,11 +54,11 @@ st.title("📄 PDF to Markdown Converter")
 st.sidebar.header("⚙️ Settings")
 
 api_key = st.sidebar.text_input("API Key", type="password", help="Gemini API Key")
-base_url = st.sidebar.text_input("Base URL (optional)", placeholder="https://api.example.com/v1")
-model = st.sidebar.text_input("Model", value="gemini-2.0-flash-exp")
+base_url = st.sidebar.text_input("Base URL (optional)", value="https://generativelanguage.googleapis.com/")
+model = st.sidebar.text_input("Model", value="gemini-3-flash-preview")
 chunk_size = st.sidebar.number_input("Chunk Size", min_value=1, max_value=10, value=2)
 use_stream = st.sidebar.toggle("Stream Output", value=True)
-use_chunking = st.sidebar.toggle("Use Chunking", value=False)
+force_chunking = st.sidebar.toggle("Force Chunking", value=False)
 
 # Prompt file selection
 prompt_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.startswith('prompt') and f.endswith('.md')]
@@ -89,11 +89,11 @@ if uploaded_file:
                         pdf_path=tmp_input_path,
                         api_key=api_key,
                         prompt=prompt,
-                        base_url=base_url if base_url else None,
+                        base_url=base_url if base_url.strip() else None,
                         model_name=model,
                         chunk_size=chunk_size,
                         stream=use_stream,
-                        use_chunking=use_chunking
+                        use_chunking=force_chunking
                     )
                     
                     # Show result
