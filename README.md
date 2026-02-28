@@ -140,3 +140,19 @@ python pdf2md.py document.pdf --no-stream
 # 指定自定义模型
 python pdf2md.py document.pdf -m gemini-2.0-flash-exp
 ```
+
+## Web UI（可选）
+
+如果喜欢图形界面，可以用 Streamlit Web UI：
+
+```bash
+# 安装 streamlit
+pip install streamlit
+
+# 启动 Web UI
+streamlit run webui.py
+```
+
+然后打开浏览器 http://localhost:8501
+
+功能与命令行一致，支持拖拽上传、参数配置、Markdown 预览和下载。
