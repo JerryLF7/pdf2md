@@ -62,54 +62,71 @@ force_chunking = st.sidebar.toggle("Force Chunking", value=False)
 
 # Prompt file selection
 prompt_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.startswith('prompt') and f.endswith('.md')]
-prompt_file = st.sidebar.selectbox("Prompt Template", prompt_files if prompt_files else ["prompt_v4.md"])
+prompt_option = st.sidebar.selectbox("Prompt Template", [""] + prompt_files if prompt_files else [""])
+
+# Custom prompt input
+custom_prompt = st.sidebar.text_area("Custom Prompt", height=150, placeholder="Or enter custom prompt here...")
 
 # Main area
-uploaded_file = st.file_uploader("Upload PDF", type=["pdf"])
+st.header("Upload PDFs")
+uploaded_files = st.file_uploader("Upload PDF", type=["pdf"], accept_multiple_files=True)
 
-if uploaded_file:
-    st.info(f"📎 {uploaded_file.name}")
+if uploaded_files:
+    file_count = len(uploaded_files)
+    st.info(f"📎 {file_count} file(s) selected")
+    
+    # Show file list
+    for i, f in enumerate(uploaded_files):
+        st.write(f"{i+1}. {f.name}")
     
     if st.button("🚀 Convert to Markdown"):
         if not api_key:
             st.error("❌ Please enter API Key")
         else:
-            with st.spinner("Converting..."):
-                # Save uploaded file to temp
-                with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_input:
-                    tmp_input.write(uploaded_file.getvalue())
-                    tmp_input_path = tmp_input.name
+            # Determine which prompt to use
+            if custom_prompt.strip():
+                prompt = custom_prompt
+            elif prompt_option:
+                prompt = load_prompt(prompt_option)
+            else:
+                prompt = load_prompt("prompt_v4.md")
+            
+            results = []
+            
+            for f in uploaded_files:
+                with st.spinner(f"Converting {f.name}..."):
+                    # Save uploaded file to temp
+                    with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_input:
+                        tmp_input.write(f.getvalue())
+                        tmp_input_path = tmp_input.name
+                    
+                    try:
+                        output_md = convert_pdf_to_markdown(
+                            pdf_path=tmp_input_path,
+                            api_key=api_key,
+                            prompt=prompt,
+                            base_url=base_url if base_url.strip() else None,
+                            model_name=model,
+                            chunk_size=chunk_size,
+                            stream=use_stream,
+                            use_chunking=force_chunking
+                        )
+                        results.append((f.name, output_md))
+                    except Exception as e:
+                        st.error(f"❌ Error converting {f.name}: {str(e)}")
+                    finally:
+                        os.unlink(tmp_input_path)
+            
+            if results:
+                st.success(f"✅ Done! {len(results)} file(s) converted")
                 
-                try:
-                    # Load prompt
-                    prompt = load_prompt(prompt_file)
-                    
-                    # Convert
-                    output_md = convert_pdf_to_markdown(
-                        pdf_path=tmp_input_path,
-                        api_key=api_key,
-                        prompt=prompt,
-                        base_url=base_url if base_url.strip() else None,
-                        model_name=model,
-                        chunk_size=chunk_size,
-                        stream=use_stream,
-                        use_chunking=force_chunking
-                    )
-                    
-                    # Show result
-                    st.success("✅ Done!")
-                    st.text_area("Markdown Output", output_md, height=400)
-                    
-                    # Download button
-                    output_filename = uploaded_file.name.replace(".pdf", ".md")
-                    st.download_button(
-                        label="📥 Download Markdown",
-                        data=output_md,
-                        file_name=output_filename,
-                        mime="text/markdown"
-                    )
-                    
-                except Exception as e:
-                    st.error(f"❌ Error: {str(e)}")
-                finally:
-                    os.unlink(tmp_input_path)
+                for filename, md_content in results:
+                    with st.expander(f"📄 {filename}"):
+                        st.text_area(filename, md_content, height=200)
+                        output_filename = filename.replace(".pdf", ".md")
+                        st.download_button(
+                            label=f"📥 Download {output_filename}",
+                            data=md_content,
+                            file_name=output_filename,
+                            mime="text/markdown"
+                        )
