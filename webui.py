@@ -6,6 +6,8 @@ Run: streamlit run webui.py
 import sys
 import os
 import tempfile
+import json
+from pathlib import Path
 
 # Auto-install dependencies if not available
 def install_if_missing(package, import_name=None):
@@ -31,6 +33,42 @@ import fitz
 from pdf2md import convert_pdf_to_markdown, load_prompt
 
 
+# Settings file path
+SETTINGS_FILE = os.path.join(os.path.expanduser("~"), ".pdf2md_settings.json")
+
+
+def load_settings():
+    """Load settings from local file"""
+    if os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+
+def save_settings(settings):
+    """Save settings to local file"""
+    try:
+        with open(SETTINGS_FILE, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, ensure_ascii=False, indent=2)
+        return True
+    except Exception as e:
+        st.error(f"Failed to save settings: {e}")
+        return False
+
+
+def clear_settings():
+    """Clear saved settings"""
+    try:
+        if os.path.exists(SETTINGS_FILE):
+            os.remove(SETTINGS_FILE)
+        return True
+    except Exception:
+        return False
+
+
 def get_pdf_page_count(pdf_file) -> int:
     """Get page count of an uploaded PDF file"""
     try:
@@ -46,11 +84,31 @@ def get_pdf_page_count(pdf_file) -> int:
     except Exception:
         return 1  # Default to 1 page if can't read
 
+
 st.set_page_config(page_title="PDF to Markdown Converter", page_icon="📄", layout="wide")
+
+# Initialize session state for settings
+if 'settings_loaded' not in st.session_state:
+    saved_settings = load_settings()
+    st.session_state.api_key = saved_settings.get("api_key", "")
+    st.session_state.base_url = saved_settings.get("base_url", "https://generativelanguage.googleapis.com/")
+    st.session_state.model = saved_settings.get("model", "gemini-3-flash-preview")
+    st.session_state.chunk_size = saved_settings.get("chunk_size", 2)
+    st.session_state.use_stream = saved_settings.get("use_stream", True)
+    st.session_state.force_chunking = saved_settings.get("force_chunking", False)
+    st.session_state.include_toc = saved_settings.get("include_toc", False)
+    # Get available prompt files
+    prompt_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.startswith('prompt') and f.endswith('.md')] if os.path.exists(os.path.dirname(__file__)) else []
+    default_prompt = saved_settings.get("prompt_option", prompt_files[0] if prompt_files else "prompt_general.md")
+    st.session_state.prompt_option = default_prompt
+    st.session_state.custom_prompt = saved_settings.get("custom_prompt", "")
+    st.session_state.settings_loaded = True
+
 
 # Initialize session state for persistent results
 if 'converted_results' not in st.session_state:
     st.session_state.converted_results = []
+
 
 # Header
 st.title("📄 PDF to Markdown Converter")
@@ -59,21 +117,86 @@ st.markdown("Convert your PDF documents into clean Markdown using Gemini AI.")
 # Sidebar settings
 with st.sidebar:
     st.header("⚙️ Settings")
-    api_key = st.text_input("API Key", type="password", help="Gemini API Key")
-    base_url = st.text_input("Base URL (optional)", value="https://generativelanguage.googleapis.com/")
-    model = st.text_input("Model", value="gemini-3-flash-preview")
+    
+    # Save/Load settings buttons
+    col_save, col_clear = st.columns(2)
+    with col_save:
+        if st.button("💾 Save Settings", use_container_width=True):
+            settings = {
+                "api_key": st.session_state.api_key,
+                "base_url": st.session_state.base_url,
+                "model": st.session_state.model,
+                "chunk_size": st.session_state.chunk_size,
+                "use_stream": st.session_state.use_stream,
+                "force_chunking": st.session_state.force_chunking,
+                "include_toc": st.session_state.include_toc,
+                "prompt_option": st.session_state.prompt_option,
+                "custom_prompt": st.session_state.custom_prompt
+            }
+            if save_settings(settings):
+                st.success("Settings saved! ✅")
+    with col_clear:
+        if st.button("🗑️ Clear Saved", use_container_width=True):
+            if clear_settings():
+                st.session_state.api_key = ""
+                st.session_state.base_url = "https://generativelanguage.googleapis.com/"
+                st.session_state.model = "gemini-3-flash-preview"
+                st.session_state.chunk_size = 2
+                st.session_state.use_stream = True
+                st.session_state.force_chunking = False
+                st.session_state.include_toc = False
+                st.session_state.prompt_option = "prompt_general.md"
+                st.session_state.custom_prompt = ""
+                st.success("Settings cleared! ✅")
+                st.rerun()
+    
+    st.divider()
+    
+    api_key = st.text_input("API Key", type="password", value=st.session_state.api_key, 
+                           help="Gemini API Key", key="api_key_input")
+    st.session_state.api_key = api_key
+    
+    base_url = st.text_input("Base URL (optional)", value=st.session_state.base_url, 
+                            key="base_url_input")
+    st.session_state.base_url = base_url
+    
+    model = st.text_input("Model", value=st.session_state.model, key="model_input")
+    st.session_state.model = model
     
     with st.expander("Advanced Options"):
-        chunk_size = st.number_input("Chunk Size (Pages)", min_value=1, max_value=20, value=2)
-        use_stream = st.toggle("Stream Output", value=True)
-        force_chunking = st.toggle("Force Chunking", value=False)
-        include_toc = st.toggle("Include TOC", value=False, help="Include Table of Contents in output")
+        chunk_size = st.number_input("Chunk Size (Pages)", min_value=1, max_value=20, 
+                                     value=st.session_state.chunk_size, key="chunk_size_input")
+        st.session_state.chunk_size = chunk_size
+        
+        use_stream = st.toggle("Stream Output", value=st.session_state.use_stream, 
+                              key="use_stream_toggle")
+        st.session_state.use_stream = use_stream
+        
+        force_chunking = st.toggle("Force Chunking", value=st.session_state.force_chunking,
+                                   key="force_chunking_toggle")
+        st.session_state.force_chunking = force_chunking
+        
+        include_toc = st.toggle("Include TOC", value=st.session_state.include_toc,
+                                help="Include Table of Contents in output", key="include_toc_toggle")
+        st.session_state.include_toc = include_toc
         
         # Prompt file selection
-        prompt_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.startswith('prompt') and f.endswith('.md')]
-        prompt_option = st.selectbox("Prompt Template", prompt_files if prompt_files else ["prompt_mortgage.md"])
+        prompt_files = [f for f in os.listdir(os.path.dirname(__file__)) if f.startswith('prompt') and f.endswith('.md')] if os.path.exists(os.path.dirname(__file__)) else []
+        if not prompt_files:
+            prompt_files = ["prompt_general.md"]
         
-    custom_prompt = st.text_area("Custom Prompt (optional)", height=200, placeholder="Or enter custom prompt here...")
+        try:
+            prompt_index = prompt_files.index(st.session_state.prompt_option) if st.session_state.prompt_option in prompt_files else 0
+        except:
+            prompt_index = 0
+            
+        prompt_option = st.selectbox("Prompt Template", prompt_files, index=prompt_index, key="prompt_select")
+        st.session_state.prompt_option = prompt_option
+        
+    custom_prompt = st.text_area("Custom Prompt (optional)", height=200, 
+                                 value=st.session_state.custom_prompt,
+                                 placeholder="Or enter custom prompt here...", key="custom_prompt_input")
+    st.session_state.custom_prompt = custom_prompt
 
 st.divider()
 
@@ -101,7 +224,7 @@ with col_input:
                 elif prompt_option:
                     prompt = load_prompt(prompt_option, skip_toc=not include_toc)
                 else:
-                    prompt = load_prompt("prompt_mortgage.md", skip_toc=not include_toc)
+                    prompt = load_prompt("prompt_general.md", skip_toc=not include_toc)
                 
                 # Pre-calculate total pages for accurate progress tracking
                 file_page_counts = []
