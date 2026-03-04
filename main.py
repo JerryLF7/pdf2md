@@ -13,8 +13,17 @@ Usage:
 import sys
 import os
 
+# 检查是否在 PyInstaller 打包环境中运行
+def is_frozen():
+    """检测是否在打包后的 exe 中运行"""
+    return getattr(sys, 'frozen', False)
+
 # 检查是否安装了必要依赖
 def check_dependencies():
+    # 如果是打包后的 exe，依赖已经包含在内，跳过检查
+    if is_frozen():
+        return
+    
     required_packages = [
         ("streamlit", "streamlit"),
         ("google.genai", "google-genai"),
