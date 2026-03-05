@@ -12,11 +12,33 @@ Usage:
 
 import sys
 import os
+import time
+import threading
 
 # 检查是否在 PyInstaller 打包环境中运行
 def is_frozen():
     """检测是否在打包后的 exe 中运行"""
     return getattr(sys, 'frozen', False)
+
+# 获取 Python 解释器路径
+def get_python_executable():
+    """获取正确的 Python 解释器路径"""
+    if is_frozen():
+        # 打包后的 exe，从 exe 所在目录找 python.exe
+        exe_dir = os.path.dirname(sys.executable)
+        # 在 Windows 上，PyInstaller 打包的 exe 旁边可能有 python DLL
+        # 我们需要找到系统 Python
+        possible_paths = [
+            os.path.join(os.path.dirname(sys.executable), 'python.exe'),
+            r'C:\Users\AAA-110\AppData\Local\Programs\Python\Python314\python.exe',
+            r'C:\Program Files\Python314\python.exe',
+        ]
+        for p in possible_paths:
+            if os.path.exists(p):
+                return p
+        # 如果都找不到，尝试用原来的
+        return sys.executable
+    return sys.executable
 
 # 检查是否安装了必要依赖
 def check_dependencies():
@@ -62,19 +84,134 @@ def main():
         run_webui()
 
 
+def monitor_process(process, process_name):
+    """监控子进程，如果退出则通知用户"""
+    return_code = process.wait()
+    if return_code != 0:
+        print(f"\n[ERROR] {process_name} exited with code {return_code}")
+        print("Check the output above for more details.")
+    else:
+        print(f"\n[INFO] {process_name} stopped")
+
+
 def run_webui():
     """启动 Web UI 模式"""
     import subprocess
-    print("Starting PDF to Markdown Web UI...")
-    print("Please open your browser to: http://localhost:8501")
-    print("Press Ctrl+C to stop the server")
+    import webbrowser
+    
+    print("=" * 60)
+    print("PDF to Markdown Converter - Web UI Mode")
+    print("=" * 60)
+    print("Starting Streamlit server...")
     
     # 获取当前目录
-    script_dir = os.path.dirname(os.path.abspath(__file__))
-    webui_path = os.path.join(script_dir, "webui.py")
+    if is_frozen():
+        # 打包后的 exe，使用 _MEIPASS 获取资源路径
+        script_dir = sys._MEIPASS
+        print(f"[DEBUG] Running as frozen exe, script_dir: {script_dir}")
+    else:
+        script_dir = os.path.dirname(os.path.abspath(__file__))
+        print(f"[DEBUG] Running as script, script_dir: {script_dir}")
     
-    # 启动 Streamlit
-    subprocess.run([sys.executable, "-m", "streamlit", "run", webui_path])
+    webui_path = os.path.join(script_dir, "webui.py")
+    print(f"[DEBUG] webui_path: {webui_path}")
+    print(f"[DEBUG] webui exists: {os.path.exists(webui_path)}")
+    
+    # 获取正确的 Python 解释器
+    python_exe = get_python_executable()
+    print(f"[DEBUG] python_exe: {python_exe}")
+    
+    # 启动 Streamlit（显示输出以便调试）
+    env = os.environ.copy()
+    env['PYTHONUNBUFFERED'] = '1'
+    
+    # 使用正确的 Python 解释器
+    process = subprocess.Popen(
+        [python_exe, "-m", "streamlit", "run", webui_path, 
+         "--server.headless=true",
+         "--server.port=8501",
+         "--server.address=127.0.0.1"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        env=env,
+        text=True,
+        bufsize=1,
+        cwd=script_dir  # 设置工作目录
+    )
+    
+    # 启动线程监控进程
+    monitor_thread = threading.Thread(target=monitor_process, args=(process, "Streamlit"))
+    monitor_thread.daemon = True
+    monitor_thread.start()
+    
+    print("\nWaiting for Streamlit to start...")
+    print("If this takes too long, check the output below for errors.")
+    
+    # 读取输出直到服务启动
+    started = False
+    startup_timeout = 15  # 15秒超时
+    start_time = time.time()
+    
+    while time.time() - start_time < startup_timeout:
+        line = process.stdout.readline()
+        if line:
+            print(f"[Streamlit] {line.rstrip()}")
+            if "Running on" in line or "URL" in line or "http://127.0.0.1:8501" in line:
+                started = True
+                break
+            # 检查错误
+            if "Error" in line or "error" in line or "Exception" in line:
+                print(f"[WARNING] Possible error detected: {line}")
+        
+        # 检查进程是否已退出
+        if process.poll() is not None:
+            print(f"[ERROR] Streamlit process exited prematurely with code {process.returncode}")
+            # 读取剩余输出
+            remaining = process.stdout.read()
+            if remaining:
+                print(remaining)
+            break
+        
+        time.sleep(0.1)
+    
+    if started:
+        print("\n" + "=" * 60)
+        print("Web UI is running!")
+        print("Please open your browser to: http://localhost:8501")
+        print("Press Ctrl+C to stop the server")
+        print("=" * 60)
+        
+        # 打开浏览器
+        webbrowser.open("http://localhost:8501")
+        
+        # 保持运行
+        try:
+            while True:
+                # 继续读取输出
+                line = process.stdout.readline()
+                if line:
+                    print(f"[Streamlit] {line.rstrip()}")
+                
+                # 检查进程状态
+                if process.poll() is not None:
+                    print("[INFO] Streamlit server stopped")
+                    break
+                
+                time.sleep(0.5)
+        except KeyboardInterrupt:
+            print("\nStopping server...")
+            process.terminate()
+            process.wait()
+    else:
+        print("\n[ERROR] Streamlit failed to start within timeout")
+        print("Check the output above for errors")
+        process.terminate()
+    
+    print("\nPress Enter to exit...")
+    try:
+        input()
+    except:
+        pass
 
 
 def run_cli():
