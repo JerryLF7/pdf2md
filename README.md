@@ -18,15 +18,18 @@
 - 🖼️ **图片文字识别 (OCR)**：支持扫描版 PDF 和图片中的文字提取
 - 📑 **目录智能处理**：默认跳过目录页，支持配置是否转录
 
-## 使用方法
-
-### 命令行方式
+## 安装
 
 ```bash
-pip install google-genai python-dotenv pymupdf tenacity
+# 克隆仓库
+git clone https://github.com/JerryLF7/pdf2md.git
+cd pdf2md
+
+# 安装依赖
+pip install google-genai python-dotenv pymupdf tenacity streamlit
 ```
 
-### 2. 配置
+## 配置
 
 **方式一：.env 文件（推荐）**
 
@@ -48,36 +51,57 @@ set BASE_URL=https://api.example.com/v1
 
 **方式三：命令行参数**
 ```bash
-python pdf2md.py input.pdf -k 你的API密钥 -u https://api.example.com/v1
+python main.py input.pdf -k 你的API密钥 -u https://api.example.com/v1
 ```
 
-### 3. 选择提示词模板
+## 提示词模板
 
 项目内置两个提示词模板：
 
-- `prompt_mortgage.md` — 财务/贷款专用（**默认**），强调金额、百分比等数据精度
+- `prompt_mortgage.md` — 财务/贷款专用，强调金额、百分比等数据精度
 - `prompt_general.md` — 通用模板，适用于各类文档
 
-在对应文件中编辑提示词即可。提示词模板支持以下占位符：
+提示词模板支持以下占位符：
 
 - `{PREV_CONTEXT}` 或 `{PREVIOUS_CONTEXT}` - 上一页输出的最后 500 字符（用于上下文衔接）
 - `{PDF_CONTENT}` 或 `{CURRENT_PDF_CONTENT}` - 当前 PDF 页面内容
 
-### 4. 运行脚本
+## 使用方法
+
+### 命令行模式
 
 ```bash
 # 基本用法
-python pdf2md.py input.pdf
+python main.py input.pdf
 
 # 指定输出文件名
-python pdf2md.py input.pdf -o output.md
+python main.py input.pdf -o output.md
 
 # 指定 API Key
-python pdf2md.py input.pdf -k 你的API密钥
+python main.py input.pdf -k 你的API密钥
 
-# 指定自定义提示词文件
-python pdf2md.py input.pdf -p my_prompt.md
+# 批量处理目录
+python main.py ./pdfs
+
+# 批量处理并指定输出目录
+python main.py ./pdfs -o ./output
 ```
+
+### Web UI 模式
+
+```bash
+python main.py
+```
+
+然后打开浏览器 http://localhost:8501
+
+Web UI 功能：
+- 🎨 拖拽上传多个 PDF 文件
+- 📊 实时进度显示（精确到页）
+- 💾 支持批量下载（ZIP 格式）
+- ⚙️ 侧边栏参数配置
+- 📝 支持自定义提示词
+- 🔄 转换结果保存在会话中
 
 ## 参数说明
 
@@ -86,7 +110,7 @@ python pdf2md.py input.pdf -p my_prompt.md
 | `input` | - | 输入的 PDF 文件路径或目录（必需） |
 | `--output` | `-o` | 输出目录（批量处理时）或输出文件（单文件时） |
 | `--api-key` | `-k` | Gemini API 密钥 |
-| `--prompt` | `-p` | 提示词文件路径（默认: prompt_mortgage.md） |
+| `--prompt` | `-p` | 提示词文件路径（默认: prompt_general.md） |
 | `--base-url` | `-u` | 自定义 Base URL（可选，用于代理或其他 API 端点） |
 | `--model` | `-m` | 使用的模型（默认: gemini-3-flash-preview） |
 | `--directory` | `-d` | 将输入作为目录，处理目录下所有 PDF 文件 |
@@ -94,9 +118,8 @@ python pdf2md.py input.pdf -p my_prompt.md
 | `--chunk-size` | `-c` | 每块页数，用于大文件分块（默认: 2） |
 | `--no-chunking` | - | 禁用自动分块处理 |
 | `--force-chunking` | - | 强制对所有 PDF 启用分块处理 |
-| `--include-toc` | - | 转录目录页（默认跳过目录） |
 
-## 分块处理说明
+## 分块处理
 
 对于大型 PDF 文件（>10 页），脚本会自动启用分块处理：
 
@@ -105,65 +128,31 @@ python pdf2md.py input.pdf -p my_prompt.md
 - **重试机制**：使用指数退避策略处理 503/429 错误
 - **缝合逻辑**：自动处理跨页表格和断句合并
 
-### 分块相关示例
-
 ```bash
-# 使用默认分块大小（每块 2 页）
-python pdf2md.py large_document.pdf
+# 自定义分块大小
+python main.py large_document.pdf -c 1
 
-# 自定义分块大小（每块 1 页，更精细的处理）
-python pdf2md.py large_document.pdf -c 1
+# 强制分块
+python main.py document.pdf --force-chunking
 
-# 强制对所有 PDF 启用分块（即使是小文件）
-python pdf2md.py document.pdf --force-chunking
-
-# 禁用自动分块
-python pdf2md.py document.pdf --no-chunking
-
-# 组合使用：强制分块 + 每块 1 页
-python pdf2md.py document.pdf --force-chunking -c 1
+# 禁用分块
+python main.py document.pdf --no-chunking
 ```
 
-## 示例
+## 打包为 exe
+
+项目已配置 PyInstaller 打包，可生成独立的 Windows exe 文件：
 
 ```bash
-# 单文件转换
-python pdf2md.py document.pdf
+# 安装 PyInstaller
+pip install pyinstaller
 
-# 批量处理：转换目录下所有 PDF 文件
-python pdf2md.py ./pdfs
+# 打包
+pyinstaller pdf2md.spec
 
-# 批量处理：指定输出目录
-python pdf2md.py ./pdfs -o ./output
-
-# 批量处理：使用 -d 参数明确指定目录模式
-python pdf2md.py ./pdfs -d
-
-# 使用流式模式（默认启用）
-python pdf2md.py document.pdf -s
-
-# 禁用流式模式
-python pdf2md.py document.pdf --no-stream
-
-# 指定自定义模型
-python pdf2md.py document.pdf -m gemini-2.0-flash-exp
+# 打包后的 exe 在 dist/ 目录
 ```
 
-## Web UI（推荐）
-
-推荐使用 Web UI，界面更友好，功能更丰富：
-
-```bash
-streamlit run webui.py
-```
-
-然后打开浏览器 http://localhost:8501
-
-### Web UI 功能
-
-- 🎨 拖拽上传多个 PDF 文件
-- 📊 实时进度显示（精确到页）
-- 💾 支持批量下载（ZIP 格式）
-- ⚙️ 侧边栏参数配置
-- 📝 支持自定义提示词
-- 🔄 转换结果保存在会话中
+双击 `dist/pdf2md.exe` 即可运行：
+- 无参数运行：启动 Web UI 并自动打开浏览器
+- 带参数运行：执行命令行转换
