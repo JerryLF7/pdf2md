@@ -241,7 +241,7 @@ Examples:
                        help='Treat input as a directory and process all PDFs in it')
     parser.add_argument('-s', '--stream', action='store_true', default=True, help='Use streaming mode')
     parser.add_argument('--no-stream', dest='stream', action='store_false', help='Disable streaming mode')
-    parser.add_argument('-c', '--chunk-size', type=int, default=2, help='Pages per chunk')
+    parser.add_argument('-c', '--chunk-size', type=int, default=5, help='Pages per chunk')
     parser.add_argument('--no-chunking', dest='use_chunking', default=None, action='store_false')
     parser.add_argument('--force-chunking', dest='use_chunking', default=None, action='store_true')
     

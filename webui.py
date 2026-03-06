@@ -93,7 +93,7 @@ if 'settings_loaded' not in st.session_state:
     st.session_state.api_key = saved_settings.get("api_key", "")
     st.session_state.base_url = saved_settings.get("base_url", "https://generativelanguage.googleapis.com/")
     st.session_state.model = saved_settings.get("model", "gemini-3-flash-preview")
-    st.session_state.chunk_size = saved_settings.get("chunk_size", 2)
+    st.session_state.chunk_size = saved_settings.get("chunk_size", 5)
     st.session_state.use_stream = saved_settings.get("use_stream", True)
     st.session_state.force_chunking = saved_settings.get("force_chunking", False)
     st.session_state.include_toc = saved_settings.get("include_toc", False)
@@ -141,7 +141,7 @@ with st.sidebar:
                 st.session_state.api_key = ""
                 st.session_state.base_url = "https://generativelanguage.googleapis.com/"
                 st.session_state.model = "gemini-3-flash-preview"
-                st.session_state.chunk_size = 2
+                st.session_state.chunk_size = 5
                 st.session_state.use_stream = True
                 st.session_state.force_chunking = False
                 st.session_state.include_toc = False

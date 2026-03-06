@@ -115,7 +115,7 @@ Web UI 功能：
 | `--model` | `-m` | 使用的模型（默认: gemini-3-flash-preview） |
 | `--directory` | `-d` | 将输入作为目录，处理目录下所有 PDF 文件 |
 | `--stream` / `--no-stream` | `-s` | 启用/禁用流式模式（默认: 启用） |
-| `--chunk-size` | `-c` | 每块页数，用于大文件分块（默认: 2） |
+| `--chunk-size` | `-c` | 每块页数，用于大文件分块（默认: 5） |
 | `--no-chunking` | - | 禁用自动分块处理 |
 | `--force-chunking` | - | 强制对所有 PDF 启用分块处理 |
 

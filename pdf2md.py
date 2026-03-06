@@ -276,9 +276,13 @@ def encode_pdf_to_base64(pdf_path: str) -> str:
 
 
 def get_output_filename(pdf_path: str) -> str:
-    """Generate output markdown filename from PDF filename"""
+    """Generate output markdown filename from PDF filename
+    
+    Returns the full path in the same directory as the input PDF file.
+    """
+    pdf_dir = Path(pdf_path).parent
     pdf_name = Path(pdf_path).stem
-    return f"{pdf_name}.md"
+    return str(pdf_dir / f"{pdf_name}.md")
 
 
 def convert_pdf_to_markdown(pdf_path: str, api_key: str, prompt: str = None, base_url: str = None,
@@ -582,7 +586,7 @@ def main():
     parser.add_argument('-d', '--directory', '--dir', action='store_true', help='Treat input as a directory and process all PDFs in it')
     parser.add_argument('-s', '--stream', action='store_true', default=True, help='Use streaming mode to avoid timeouts (default: enabled)')
     parser.add_argument('--no-stream', dest='stream', action='store_false', help='Disable streaming mode')
-    parser.add_argument('-c', '--chunk-size', type=int, default=2, help='Number of pages per chunk for large PDFs (default: 2, use 1 for more granular processing)')
+    parser.add_argument('-c', '--chunk-size', type=int, default=5, help='Number of pages per chunk for large PDFs (default: 5, use 1 for more granular processing)')
     parser.add_argument('--no-chunking', dest='use_chunking', default=None, action='store_false', help='Disable automatic chunking for large PDFs')
     parser.add_argument('--force-chunking', dest='use_chunking', default=None, action='store_true', help='Force chunking for all PDFs')
     parser.add_argument('--include-toc', action='store_true', help='Include Table of Contents in output (default: skip TOC)')
