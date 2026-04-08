@@ -17,7 +17,11 @@ Transcribe the provided PDF content into a Markdown document. You must perform a
 
 ## 3. Layout & Structure Fidelity
 - **Bullet Point Integrity**: Maintain the exact hierarchy of bullet points. Replicate nested levels (bullets within bullets) precisely.
-- **Heading Mapping**: Use H1, H2, and H3 to match the visual hierarchy of the PDF titles.
+- **Heading Mapping**: Map heading levels strictly by the numeric depth in the original title — not by font size or visual prominence.
+  - A top-level numbered heading (e.g., `1–INTRODUCTION`, `2. ELIGIBILITY`) → `#` (H1)
+  - A second-level numbered heading (e.g., `1.1 COMPANY OVERVIEW`, `2.3 LOAN TYPES`) → `##` (H2)
+  - A third-level numbered heading (e.g., `1.1.1 Background`, `2.3.4 Exceptions`) → `###` (H3)
+  - The markdown heading level MUST exactly match the numeric depth: `X` → `#`, `X.Y` → `##`, `X.Y.Z` → `###`. No exceptions.
 - **Sequence**: Follow the exact linear order of the document sections.
 
 ## 4. Complex Table & Matrix Handling
